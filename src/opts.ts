@@ -93,7 +93,9 @@ async function getCacheMapFromDockerfile(dockerfilePath: string, bindRoot: strin
         }
 
         // The directory on the host to inject/extract the cache mount data from
-        const bindDir = bindRoot !== null ? `${bindRoot}/${id}` : id
+        // Normalize the id to avoid double slashes when id starts with '/'
+        const normalizedId = id.startsWith('/') ? id.slice(1) : id;
+        const bindDir = bindRoot !== null ? `${bindRoot}/${normalizedId}` : id
 
         // The target in this action does not matter as long as it is
         // different than /var/dance-cache of course
@@ -185,4 +187,12 @@ export function getMountArgsString(cacheOptions: CacheOptions): string {
 
 export function getBuilder(opts: Opts): string {
     return opts["builder"] == null || opts["builder"] == "" ? "default" : opts["builder"];
+}
+
+/**
+ * Generate a unique suffix from a path string for Docker image/container names.
+ * Replaces special characters with dashes and normalizes the result.
+ */
+export function generateUniqueSuffix(path: string): string {
+    return path.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
 }

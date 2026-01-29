@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { getCacheMap, getTargetPath, getMountArgsString, parseOpts, getUID, getGID } from '../src/opts.js'
+import { getCacheMap, getTargetPath, getMountArgsString, parseOpts, getUID, getGID, generateUniqueSuffix } from '../src/opts.js'
 import { promises as fs } from 'fs'
 
 test('parseOpts with no arguments', () => {
@@ -220,7 +220,7 @@ test('getCacheMapFromDockerfile with bindRoot', async ({ onTestFinished }) => {
 
     expect(cacheMap).toEqual(
         {
-            [`${cacheDir}//tmp/cache`]: {
+            [`${cacheDir}/tmp/cache`]: {
                 'id': '/tmp/cache',
                 'target': '/var/cache-target'
             },
@@ -310,4 +310,29 @@ test('getGID with object with gid', () => {
     const cacheOptions = { target: 'targetPath', shared: true, id: 1, gid: 1000 }
     const gid = getGID(cacheOptions)
     expect(gid).toBe('1000')
+})
+
+test('generateUniqueSuffix with simple path', () => {
+    const suffix = generateUniqueSuffix('go-mod')
+    expect(suffix).toBe('go-mod')
+})
+
+test('generateUniqueSuffix with path containing slashes', () => {
+    const suffix = generateUniqueSuffix('/var/cache/apt')
+    expect(suffix).toBe('var-cache-apt')
+})
+
+test('generateUniqueSuffix with path containing special characters', () => {
+    const suffix = generateUniqueSuffix('cache-mount/go-mod')
+    expect(suffix).toBe('cache-mount-go-mod')
+})
+
+test('generateUniqueSuffix with uppercase letters', () => {
+    const suffix = generateUniqueSuffix('Go-Build')
+    expect(suffix).toBe('go-build')
+})
+
+test('generateUniqueSuffix with consecutive special characters', () => {
+    const suffix = generateUniqueSuffix('//var//cache//')
+    expect(suffix).toBe('var-cache')
 })
