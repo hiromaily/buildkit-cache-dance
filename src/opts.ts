@@ -1,5 +1,6 @@
 import mri from 'mri';
 import { promises as fs } from 'fs';
+import path from 'path';
 import { getInput, warning } from '@actions/core/lib/core.js';
 import { DockerfileParser, ModifiableInstruction } from 'dockerfile-ast';
 
@@ -93,9 +94,9 @@ async function getCacheMapFromDockerfile(dockerfilePath: string, bindRoot: strin
         }
 
         // The directory on the host to inject/extract the cache mount data from
-        // Normalize the id to avoid double slashes when id starts with '/'
-        const normalizedId = id.startsWith('/') ? id.slice(1) : id;
-        const bindDir = bindRoot !== null ? `${bindRoot}/${normalizedId}` : id
+        // Use path.basename to prevent path traversal attacks (e.g., id containing '..')
+        const normalizedId = path.basename(id);
+        const bindDir = bindRoot !== null ? path.join(bindRoot, normalizedId) : normalizedId
 
         // The target in this action does not matter as long as it is
         // different than /var/dance-cache of course

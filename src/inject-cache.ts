@@ -42,14 +42,16 @@ RUN --mount=${mountArgs} \
     await fs.writeFile(path.join(scratchDir, 'Dancefile.inject'), dancefileContent);
     console.log(dancefileContent);
 
-    // Inject Data into Docker Cache
-    await run('docker', ['buildx', 'build', '--builder', builder ,'-f', path.join(scratchDir, 'Dancefile.inject'), '--tag', imageName, cacheSource]);
-
-    // Cleanup: Remove the temporary image
     try {
-        await run('docker', ['rmi', '-f', imageName]);
-    } catch (error) {
-        // Ignore cleanup errors
+        // Inject Data into Docker Cache
+        await run('docker', ['buildx', 'build', '--builder', builder ,'-f', path.join(scratchDir, 'Dancefile.inject'), '--tag', imageName, cacheSource]);
+    } finally {
+        // Cleanup: Remove the temporary image (always runs)
+        try {
+            await run('docker', ['rmi', '-f', imageName]);
+        } catch (error) {
+            // Ignore cleanup errors
+        }
     }
 
     // Clean Directories

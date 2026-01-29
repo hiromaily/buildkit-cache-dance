@@ -186,9 +186,11 @@ test('getCacheMapFromDockerfile without bindRoot', async ({ onTestFinished }) =>
     const opts = parseOpts(['--dockerfile', dockerfilePath])
     const cacheMap = await getCacheMap(opts)
 
+    // Note: path.basename is used for security (prevents path traversal)
+    // So '/tmp/cache' becomes 'cache', and 'cache1' stays 'cache1'
     expect(cacheMap).toEqual(
         {
-            '/tmp/cache': {
+            'cache': {
                 'id': '/tmp/cache',
                 'target': '/var/cache-target'
             },
@@ -218,9 +220,11 @@ test('getCacheMapFromDockerfile with bindRoot', async ({ onTestFinished }) => {
     const opts = parseOpts(['--dockerfile', dockerfilePath, '--cache-dir', cacheDir])
     const cacheMap = await getCacheMap(opts)
 
+    // Note: path.basename is used for security (prevents path traversal)
+    // So '/tmp/cache' becomes 'cache' in the bindDir
     expect(cacheMap).toEqual(
         {
-            [`${cacheDir}/tmp/cache`]: {
+            [`${cacheDir}/cache`]: {
                 'id': '/tmp/cache',
                 'target': '/var/cache-target'
             },
@@ -272,6 +276,32 @@ test('getMountArgsString with object', () => {
     const cacheOptions = { target: 'targetPath', shared: true, id: 1 }
     const mountString = getMountArgsString(cacheOptions)
     expect(mountString).toBe('type=cache,target=targetPath,shared=true,id=1')
+})
+
+test('getMountArgsString with Go cache pattern (explicit id)', () => {
+    // This is the typical Go cache pattern used in GitHub Actions:
+    // cache-map: { "go-mod": { "target": "/go/pkg/mod", "id": "go-mod" } }
+    const goModOptions = { target: '/go/pkg/mod', id: 'go-mod' }
+    const goBuildOptions = { target: '/root/.cache/go-build', id: 'go-build' }
+    
+    expect(getMountArgsString(goModOptions)).toBe('type=cache,target=/go/pkg/mod,id=go-mod')
+    expect(getMountArgsString(goBuildOptions)).toBe('type=cache,target=/root/.cache/go-build,id=go-build')
+})
+
+test('getCacheMap with explicit cache-map (Go cache pattern)', async () => {
+    // Simulates GitHub Actions workflow with explicit cache-map
+    const cacheMapJson = JSON.stringify({
+        "go-mod": { "target": "/go/pkg/mod", "id": "go-mod" },
+        "go-build": { "target": "/root/.cache/go-build", "id": "go-build" }
+    })
+    const opts = parseOpts(['--cache-map', cacheMapJson])
+    const cacheMap = await getCacheMap(opts)
+    
+    // Verify cache-map is used as-is (not modified by path.basename)
+    expect(cacheMap).toEqual({
+        "go-mod": { "target": "/go/pkg/mod", "id": "go-mod" },
+        "go-build": { "target": "/root/.cache/go-build", "id": "go-build" }
+    })
 })
 
 test('getUID with string', () => {

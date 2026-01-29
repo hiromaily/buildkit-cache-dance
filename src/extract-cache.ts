@@ -31,38 +31,40 @@ RUN --mount=${mountArgs} \
     await fs.writeFile(path.join(scratchDir, 'Dancefile.extract'), dancefileContent);
     console.log(dancefileContent);
 
-    // Extract Data into Docker Image
-    await run('docker', ['buildx', 'build', '--builder', builder, '-f', path.join(scratchDir, 'Dancefile.extract'), '--tag', imageName, '--load', scratchDir]);
-
-    // Create Extraction Container
     try {
-        await run('docker', ['rm', '-f', containerName]);
-    } catch (error) {
-        // Ignore error if container does not exist
-    }
-    await run('docker', ['create', '-ti', '--name', containerName, imageName]);
+        // Extract Data into Docker Image
+        await run('docker', ['buildx', 'build', '--builder', builder, '-f', path.join(scratchDir, 'Dancefile.extract'), '--tag', imageName, '--load', scratchDir]);
 
-    // Unpack Docker Image into Scratch
-    await runPiped(
-        ['docker', ['cp', '-L', `${containerName}:/var/dance-cache`, '-']],
-        ['tar', ['-H', 'posix', '-x', '-C', scratchDir]]
-    );
+        // Create Extraction Container
+        try {
+            await run('docker', ['rm', '-f', containerName]);
+        } catch (error) {
+            // Ignore error if container does not exist
+        }
+        await run('docker', ['create', '-ti', '--name', containerName, imageName]);
 
-    // Cleanup: Remove the temporary container and image
-    try {
-        await run('docker', ['rm', '-f', containerName]);
-    } catch (error) {
-        // Ignore cleanup errors
-    }
-    try {
-        await run('docker', ['rmi', '-f', imageName]);
-    } catch (error) {
-        // Ignore cleanup errors
-    }
+        // Unpack Docker Image into Scratch
+        await runPiped(
+            ['docker', ['cp', '-L', `${containerName}:/var/dance-cache`, '-']],
+            ['tar', ['-H', 'posix', '-x', '-C', scratchDir]]
+        );
 
-    // Move Cache into Its Place
-    await run('sudo', ['rm', '-rf', cacheSource]);
-    await fs.rename(path.join(scratchDir, 'dance-cache'), cacheSource);
+        // Move Cache into Its Place
+        await run('sudo', ['rm', '-rf', cacheSource]);
+        await fs.rename(path.join(scratchDir, 'dance-cache'), cacheSource);
+    } finally {
+        // Cleanup: Remove the temporary container and image (always runs)
+        try {
+            await run('docker', ['rm', '-f', containerName]);
+        } catch (error) {
+            // Ignore cleanup errors
+        }
+        try {
+            await run('docker', ['rmi', '-f', imageName]);
+        } catch (error) {
+            // Ignore cleanup errors
+        }
+    }
 }
 
 export async function extractCaches(opts: Opts) {
