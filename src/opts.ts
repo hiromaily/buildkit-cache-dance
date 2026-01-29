@@ -13,6 +13,7 @@ export type Opts = {
   "skip-extraction": boolean
   "utility-image": string
   "builder"?: string
+  "is-debug": boolean
   help: boolean
   /** @deprecated Use `cache-map` instead */
   "cache-source"?: string
@@ -31,10 +32,11 @@ export function parseOpts(args: string[]): mri.Argv<Opts> {
       "extract": process.env[`STATE_POST`] !== undefined,
       "utility-image": getInput("utility-image") || "ghcr.io/containerd/busybox:latest",
       "builder": getInput("builder") || "default",
+      "is-debug": (getInput("is-debug") || "false") === "true",
       "help": false,
     },
     string: ["cache-map", "dockerfile", "cache-dir", "scratch-dir", "cache-source", "cache-target", "utility-image", "builder"],
-    boolean: ["skip-extraction", "help", "extract"],
+    boolean: ["skip-extraction", "help", "extract", "is-debug"],
     alias: {
       "help": ["h"],
     },
@@ -64,6 +66,7 @@ Options:
   --skip-extraction  Skip the extraction of the cache from the docker container
   --utility-image  The container image to use for injecting and extracting the cache. Default: 'ghcr.io/containerd/busybox:latest'
   --builder      The name of the buildx builder to use for the cache injection
+  --is-debug     Enable verbose debug logs for troubleshooting. Default: 'false'
   --help         Show this help
 `);
 }
@@ -188,6 +191,10 @@ export function getMountArgsString(cacheOptions: CacheOptions): string {
 
 export function getBuilder(opts: Opts): string {
     return opts["builder"] == null || opts["builder"] == "" ? "default" : opts["builder"];
+}
+
+export function isDebug(opts: Opts): boolean {
+    return opts["is-debug"] === true;
 }
 
 /**
