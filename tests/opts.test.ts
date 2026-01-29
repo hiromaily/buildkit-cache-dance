@@ -14,6 +14,7 @@ test('parseOpts with no arguments', () => {
         "extract": false,
         "h": false,
         "help": false,
+        "is-debug": false,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -31,6 +32,7 @@ test('parseOpts with cache-map argument', () => {
         "extract": false,
         "h": false,
         "help": false,
+        "is-debug": false,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -48,6 +50,7 @@ test('parseOpts with deprecated cache-source and cache-target arguments', () => 
         "extract": false,
         "h": false,
         "help": false,
+        "is-debug": false,
         "cache-source": 'source',
         "cache-target": 'target',
         "utility-image": "ghcr.io/containerd/busybox:latest",
@@ -67,6 +70,7 @@ test('parseOpts with utility-image argument', () => {
         "extract": false,
         "h": false,
         "help": false,
+        "is-debug": false,
         "utility-image": "alpine:1",
         "builder": "default"
     })
@@ -84,6 +88,7 @@ test('parseOpts with builder argument', () => {
         "extract": false,
         "h": false,
         "help": false,
+        "is-debug": false,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "another-builder"
     })
@@ -101,6 +106,7 @@ test('parseOpts with dockerfile argument', () => {
         "extract": false,
         "h": false,
         "help": false,
+        "is-debug": false,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -118,6 +124,7 @@ test('parseOpts with cache-dir argument', () => {
         "extract": false,
         "h": false,
         "help": false,
+        "is-debug": false,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -135,6 +142,7 @@ test('parseOpts with help argument', () => {
         "extract": false,
         "h": true,
         "help": true,
+        "is-debug": false,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })

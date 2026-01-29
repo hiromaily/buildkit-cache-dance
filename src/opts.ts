@@ -13,6 +13,7 @@ export type Opts = {
   "skip-extraction": boolean
   "utility-image": string
   "builder"?: string
+  "is-debug": boolean
   help: boolean
   /** @deprecated Use `cache-map` instead */
   "cache-source"?: string
@@ -31,10 +32,11 @@ export function parseOpts(args: string[]): mri.Argv<Opts> {
       "extract": process.env[`STATE_POST`] !== undefined,
       "utility-image": getInput("utility-image") || "ghcr.io/containerd/busybox:latest",
       "builder": getInput("builder") || "default",
+      "is-debug": (getInput("is-debug") || "false") === "true",
       "help": false,
     },
     string: ["cache-map", "dockerfile", "cache-dir", "scratch-dir", "cache-source", "cache-target", "utility-image", "builder"],
-    boolean: ["skip-extraction", "help", "extract"],
+    boolean: ["skip-extraction", "help", "extract", "is-debug"],
     alias: {
       "help": ["h"],
     },
@@ -64,6 +66,7 @@ Options:
   --skip-extraction  Skip the extraction of the cache from the docker container
   --utility-image  The container image to use for injecting and extracting the cache. Default: 'ghcr.io/containerd/busybox:latest'
   --builder      The name of the buildx builder to use for the cache injection
+  --is-debug     Enable verbose debug logs for troubleshooting. Default: 'false'
   --help         Show this help
 `);
 }
@@ -190,10 +193,59 @@ export function getBuilder(opts: Opts): string {
     return opts["builder"] == null || opts["builder"] == "" ? "default" : opts["builder"];
 }
 
+export function isDebug(opts: Opts): boolean {
+    return opts["is-debug"] === true;
+}
+
 /**
  * Generate a unique suffix from a path string for Docker image/container names.
  * Replaces special characters with dashes and normalizes the result.
  */
-export function generateUniqueSuffix(path: string): string {
-    return path.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+export function generateUniqueSuffix(pathStr: string): string {
+    return pathStr.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+}
+
+/**
+ * Validate that a path is safe for use in file operations.
+ * Prevents path traversal attacks by rejecting absolute paths and paths containing '..'.
+ * @throws Error if the path is unsafe
+ */
+export function validateSafePath(pathStr: string, label: string): void {
+    // Reject absolute paths
+    if (path.isAbsolute(pathStr)) {
+        throw new Error(`${label} must be a relative path, got absolute path: ${pathStr}`);
+    }
+    // Reject paths containing '..'
+    const normalized = path.normalize(pathStr);
+    if (normalized.startsWith('..') || normalized.includes(`${path.sep}..`)) {
+        throw new Error(`${label} contains path traversal sequence: ${pathStr}`);
+    }
+    // Reject paths with shell metacharacters that could be used for injection
+    const dangerousChars = /[;|&$`\\'"<>(){}[\]!#*?~]/;
+    if (dangerousChars.test(pathStr)) {
+        throw new Error(`${label} contains potentially dangerous characters: ${pathStr}`);
+    }
+}
+
+/**
+ * Sanitize a string for safe use in Dockerfile RUN instructions.
+ * Escapes shell metacharacters to prevent command injection.
+ */
+export function sanitizeForDockerfile(value: string): string {
+    // Only allow safe characters for mount options and paths
+    // This is a whitelist approach - only alphanumeric, slash, dot, dash, underscore, equals, comma
+    if (!/^[a-zA-Z0-9/._\-=,]+$/.test(value)) {
+        throw new Error(`Unsafe characters in value for Dockerfile: ${value}`);
+    }
+    return value;
+}
+
+/**
+ * Check if a path is within the workspace (relative and doesn't escape).
+ * Used for debug inspection to prevent information disclosure.
+ */
+export function isPathWithinWorkspace(pathStr: string, workspaceRoot: string): boolean {
+    const resolvedPath = path.resolve(workspaceRoot, pathStr);
+    const normalizedWorkspace = path.resolve(workspaceRoot);
+    return resolvedPath.startsWith(normalizedWorkspace + path.sep) || resolvedPath === normalizedWorkspace;
 }

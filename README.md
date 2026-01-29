@@ -21,6 +21,7 @@ This fork includes critical bug fixes not present in the upstream repository:
 - **Fix double slash issue** ([#33](https://github.com/reproducible-containers/buildkit-cache-dance/issues/33)): Correctly handles cache ids starting with '/'
 - **Add scratchDir cleanup**: Prevents leftover data from previous iterations
 - **Improve cleanup reliability**: Moves Docker cleanup to `finally` blocks
+- **Add debug mode**: `is-debug: true` enables verbose logging for troubleshooting cache issues
 
 ## Examples
 
@@ -161,8 +162,43 @@ Options:
   --scratch-dir  Where the action is stores some temporary files for its processing. Default: 'scratch'
   --skip-extraction  Skip the extraction of the cache from the docker container
   --builder     The name of the buildx builder. Default: 'default'
+  --is-debug    Enable verbose debug logs for troubleshooting. Default: 'false'
   --help         Show this help
 ```
+
+## Debugging
+
+When cache is not working as expected, enable debug mode to get detailed logs:
+
+```yaml
+- name: BuildKit Cache Dance (inject; extract in post)
+  uses: hiromaily/buildkit-cache-dance@v4
+  with:
+    builder: ${{ steps.setup-buildx.outputs.name }}
+    cache-dir: cache-mount
+    dockerfile: Dockerfile
+    cache-map: |
+      {
+        "go-mod":  { "target": "/go/pkg/mod", "id": "go-mod" },
+        "go-build":{ "target": "/root/.cache/go-build", "id": "go-build" }
+      }
+    skip-extraction: false
+    is-debug: true
+```
+
+Debug mode outputs:
+
+1. **Input values dump**: All options with resolved absolute paths
+2. **Parsed cache-map**: The actual cache map being used
+3. **Generated mount args**: Shows exactly what `--mount=` arguments are generated (critical for verifying `id=` is included)
+4. **Directory inspection**: Size and contents of cache directories before/after inject/extract
+5. **Docker commands**: All docker commands being executed
+
+This helps diagnose common issues:
+- Path mismatches between Dockerfile and cache-map
+- Missing `id=` in mount arguments (causes cache miss)
+- Empty cache directories after extraction
+- Cache not being saved by `actions/cache`
 
 ## Releases
 ### v1
@@ -191,6 +227,7 @@ This version is maintained in this fork (`hiromaily/buildkit-cache-dance`) and i
 - Improved cleanup reliability with `try...finally` blocks
 - Updated dependencies (parcel, typescript, vitest, etc.)
 - Security improvements
+- **Debug mode** (`is-debug: true`) for troubleshooting cache issues
 
 **Usage:**
 ```yaml

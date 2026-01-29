@@ -30,6 +30,9 @@ inputs:
   builder:
     default: default
     description: "The name of the builder. Default: 'default'"
+  is-debug:
+    default: "false"
+    description: "Enable verbose debug logs for troubleshooting cache issues"
 runs:
   using: 'node20'
   main: 'dist/index.js'
