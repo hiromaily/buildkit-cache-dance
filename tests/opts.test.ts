@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { getCacheMap, getTargetPath, getMountArgsString, parseOpts, getUID, getGID } from '../src/opts.js'
+import { getCacheMap, getTargetPath, getMountArgsString, parseOpts, getUID, getGID, generateUniqueSuffix } from '../src/opts.js'
 import { promises as fs } from 'fs'
 
 test('parseOpts with no arguments', () => {
@@ -186,9 +186,11 @@ test('getCacheMapFromDockerfile without bindRoot', async ({ onTestFinished }) =>
     const opts = parseOpts(['--dockerfile', dockerfilePath])
     const cacheMap = await getCacheMap(opts)
 
+    // Note: path.basename is used for security (prevents path traversal)
+    // So '/tmp/cache' becomes 'cache', and 'cache1' stays 'cache1'
     expect(cacheMap).toEqual(
         {
-            '/tmp/cache': {
+            'cache': {
                 'id': '/tmp/cache',
                 'target': '/var/cache-target'
             },
@@ -218,9 +220,11 @@ test('getCacheMapFromDockerfile with bindRoot', async ({ onTestFinished }) => {
     const opts = parseOpts(['--dockerfile', dockerfilePath, '--cache-dir', cacheDir])
     const cacheMap = await getCacheMap(opts)
 
+    // Note: path.basename is used for security (prevents path traversal)
+    // So '/tmp/cache' becomes 'cache' in the bindDir
     expect(cacheMap).toEqual(
         {
-            [`${cacheDir}//tmp/cache`]: {
+            [`${cacheDir}/cache`]: {
                 'id': '/tmp/cache',
                 'target': '/var/cache-target'
             },
@@ -274,6 +278,32 @@ test('getMountArgsString with object', () => {
     expect(mountString).toBe('type=cache,target=targetPath,shared=true,id=1')
 })
 
+test('getMountArgsString with Go cache pattern (explicit id)', () => {
+    // This is the typical Go cache pattern used in GitHub Actions:
+    // cache-map: { "go-mod": { "target": "/go/pkg/mod", "id": "go-mod" } }
+    const goModOptions = { target: '/go/pkg/mod', id: 'go-mod' }
+    const goBuildOptions = { target: '/root/.cache/go-build', id: 'go-build' }
+    
+    expect(getMountArgsString(goModOptions)).toBe('type=cache,target=/go/pkg/mod,id=go-mod')
+    expect(getMountArgsString(goBuildOptions)).toBe('type=cache,target=/root/.cache/go-build,id=go-build')
+})
+
+test('getCacheMap with explicit cache-map (Go cache pattern)', async () => {
+    // Simulates GitHub Actions workflow with explicit cache-map
+    const cacheMapJson = JSON.stringify({
+        "go-mod": { "target": "/go/pkg/mod", "id": "go-mod" },
+        "go-build": { "target": "/root/.cache/go-build", "id": "go-build" }
+    })
+    const opts = parseOpts(['--cache-map', cacheMapJson])
+    const cacheMap = await getCacheMap(opts)
+    
+    // Verify cache-map is used as-is (not modified by path.basename)
+    expect(cacheMap).toEqual({
+        "go-mod": { "target": "/go/pkg/mod", "id": "go-mod" },
+        "go-build": { "target": "/root/.cache/go-build", "id": "go-build" }
+    })
+})
+
 test('getUID with string', () => {
     const cacheOptions = 'targetPath'
     const uid = getUID(cacheOptions)
@@ -310,4 +340,29 @@ test('getGID with object with gid', () => {
     const cacheOptions = { target: 'targetPath', shared: true, id: 1, gid: 1000 }
     const gid = getGID(cacheOptions)
     expect(gid).toBe('1000')
+})
+
+test('generateUniqueSuffix with simple path', () => {
+    const suffix = generateUniqueSuffix('go-mod')
+    expect(suffix).toBe('go-mod')
+})
+
+test('generateUniqueSuffix with path containing slashes', () => {
+    const suffix = generateUniqueSuffix('/var/cache/apt')
+    expect(suffix).toBe('var-cache-apt')
+})
+
+test('generateUniqueSuffix with path containing special characters', () => {
+    const suffix = generateUniqueSuffix('cache-mount/go-mod')
+    expect(suffix).toBe('cache-mount-go-mod')
+})
+
+test('generateUniqueSuffix with uppercase letters', () => {
+    const suffix = generateUniqueSuffix('Go-Build')
+    expect(suffix).toBe('go-build')
+})
+
+test('generateUniqueSuffix with consecutive special characters', () => {
+    const suffix = generateUniqueSuffix('//var//cache//')
+    expect(suffix).toBe('var-cache')
 })

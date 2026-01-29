@@ -1,10 +1,14 @@
 import { promises as fs } from "fs";
 import path from 'path';
-import { CacheOptions, Opts, getCacheMap, getMountArgsString, getTargetPath, getUID, getGID, getBuilder } from './opts.js';
+import { CacheOptions, Opts, getCacheMap, getMountArgsString, getTargetPath, getUID, getGID, getBuilder, generateUniqueSuffix } from './opts.js';
 import { run } from './run.js';
 import { notice } from '@actions/core/lib/core.js';
 
 async function injectCache(cacheSource: string, cacheOptions: CacheOptions, scratchDir: string, containerImage: string, builder: string) {
+    // Generate unique image name for this cache to avoid conflicts with multiple caches
+    const uniqueSuffix = generateUniqueSuffix(cacheSource);
+    const imageName = `dance:inject-${uniqueSuffix}`;
+
     // Clean Scratch Directory
     await fs.rm(scratchDir, { recursive: true, force: true });
     await fs.mkdir(scratchDir, { recursive: true });
@@ -38,8 +42,17 @@ RUN --mount=${mountArgs} \
     await fs.writeFile(path.join(scratchDir, 'Dancefile.inject'), dancefileContent);
     console.log(dancefileContent);
 
-    // Inject Data into Docker Cache
-    await run('docker', ['buildx', 'build', '--builder', builder ,'-f', path.join(scratchDir, 'Dancefile.inject'), '--tag', 'dance:inject', cacheSource]);
+    try {
+        // Inject Data into Docker Cache
+        await run('docker', ['buildx', 'build', '--builder', builder ,'-f', path.join(scratchDir, 'Dancefile.inject'), '--tag', imageName, cacheSource]);
+    } finally {
+        // Cleanup: Remove the temporary image (always runs)
+        try {
+            await run('docker', ['rmi', '-f', imageName]);
+        } catch (error) {
+            // Ignore cleanup errors
+        }
+    }
 
     // Clean Directories
     try {
