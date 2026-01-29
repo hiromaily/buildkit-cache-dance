@@ -1,6 +1,8 @@
 import spawnPlease from 'spawn-please'
 import cp, { type ChildProcess } from 'child_process';
 import { promises as fs } from 'fs';
+import path from 'path';
+import { isPathWithinWorkspace } from './opts.js';
 
 // Global debug flag - set by setDebugMode()
 let debugMode = false;
@@ -46,12 +48,21 @@ export async function run(command: string, args: string[], options?: { captureOu
 /**
  * Debug utility to inspect a directory's contents
  * Returns the size in bytes for comparison purposes
+ * Security: Only allows inspection of paths within the workspace to prevent information disclosure
  */
 export async function debugInspectDirectory(dirPath: string, label: string): Promise<string | null> {
     if (!debugMode) return null;
 
     debugSection(`Directory Inspection: ${label}`);
     debug(`Path: ${dirPath}`);
+
+    // Security: Only allow inspection within workspace
+    const workspaceRoot = process.env.GITHUB_WORKSPACE || process.cwd();
+    const resolvedPath = path.resolve(dirPath);
+    if (!isPathWithinWorkspace(resolvedPath, workspaceRoot)) {
+        debug(`  -> SKIPPED: Path is outside workspace (security restriction)`);
+        return null;
+    }
 
     let sizeStr: string | null = null;
 

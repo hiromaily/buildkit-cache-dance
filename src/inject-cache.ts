@@ -1,10 +1,14 @@
 import { promises as fs } from "fs";
 import path from 'path';
-import { CacheOptions, Opts, getCacheMap, getMountArgsString, getTargetPath, getUID, getGID, getBuilder, generateUniqueSuffix, isDebug } from './opts.js';
+import { CacheOptions, Opts, getCacheMap, getMountArgsString, getTargetPath, getUID, getGID, getBuilder, generateUniqueSuffix, isDebug, validateSafePath, sanitizeForDockerfile } from './opts.js';
 import { run, debug, debugSection, debugInspectDirectory } from './run.js';
 import { notice } from '@actions/core/lib/core.js';
 
 async function injectCache(cacheSource: string, cacheOptions: CacheOptions, scratchDir: string, containerImage: string, builder: string, debugEnabled: boolean) {
+    // Security: Validate cacheSource is a safe relative path
+    validateSafePath(cacheSource, 'cache source');
+    validateSafePath(scratchDir, 'scratch directory');
+
     // Generate unique image name for this cache to avoid conflicts with multiple caches
     const uniqueSuffix = generateUniqueSuffix(cacheSource);
     const imageName = `dance:inject-${uniqueSuffix}`;
@@ -36,6 +40,10 @@ async function injectCache(cacheSource: string, cacheOptions: CacheOptions, scra
 
     const targetPath = getTargetPath(cacheOptions);
     const mountArgs = getMountArgsString(cacheOptions);
+
+    // Security: Validate values that will be used in Dockerfile
+    sanitizeForDockerfile(targetPath);
+    sanitizeForDockerfile(mountArgs);
 
     debug(`Target path: ${targetPath}`);
     debug(`Mount args: ${mountArgs}`);

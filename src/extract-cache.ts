@@ -1,9 +1,13 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import {CacheOptions, Opts, getCacheMap, getMountArgsString, getTargetPath, getBuilder, generateUniqueSuffix, isDebug} from './opts.js';
+import {CacheOptions, Opts, getCacheMap, getMountArgsString, getTargetPath, getBuilder, generateUniqueSuffix, isDebug, validateSafePath, sanitizeForDockerfile} from './opts.js';
 import { run, runPiped, debug, debugSection, debugInspectDirectory, debugSizeComparison } from './run.js';
 
 async function extractCache(cacheSource: string, cacheOptions: CacheOptions, scratchDir: string, containerImage: string, builder: string, debugEnabled: boolean) {
+    // Security: Validate cacheSource is a safe relative path
+    validateSafePath(cacheSource, 'cache source');
+    validateSafePath(scratchDir, 'scratch directory');
+
     // Generate unique names for this cache to avoid conflicts with multiple caches
     const uniqueSuffix = generateUniqueSuffix(cacheSource);
     const imageName = `dance:extract-${uniqueSuffix}`;
@@ -30,6 +34,10 @@ async function extractCache(cacheSource: string, cacheOptions: CacheOptions, scr
     // Prepare Dancefile to Access Caches
     const targetPath = getTargetPath(cacheOptions);
     const mountArgs = getMountArgsString(cacheOptions);
+
+    // Security: Validate values that will be used in Dockerfile
+    sanitizeForDockerfile(targetPath);
+    sanitizeForDockerfile(mountArgs);
 
     debug(`Target path: ${targetPath}`);
     debug(`Mount args (CRITICAL): ${mountArgs}`);

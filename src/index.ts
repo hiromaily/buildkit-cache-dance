@@ -52,7 +52,8 @@ async function dumpInputs(opts: ReturnType<typeof parseOpts>) {
       debug(`    mount: --mount=${mountArgs}`);
     }
   } catch (e) {
-    debug(`Failed to parse cache-map: ${e}`);
+    const message = e instanceof Error ? e.message : String(e);
+    debug(`Failed to parse cache-map: ${message}`);
   }
 
   // Check if dockerfile exists

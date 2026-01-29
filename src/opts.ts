@@ -201,6 +201,51 @@ export function isDebug(opts: Opts): boolean {
  * Generate a unique suffix from a path string for Docker image/container names.
  * Replaces special characters with dashes and normalizes the result.
  */
-export function generateUniqueSuffix(path: string): string {
-    return path.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+export function generateUniqueSuffix(pathStr: string): string {
+    return pathStr.replace(/[^a-zA-Z0-9]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').toLowerCase();
+}
+
+/**
+ * Validate that a path is safe for use in file operations.
+ * Prevents path traversal attacks by rejecting absolute paths and paths containing '..'.
+ * @throws Error if the path is unsafe
+ */
+export function validateSafePath(pathStr: string, label: string): void {
+    // Reject absolute paths
+    if (path.isAbsolute(pathStr)) {
+        throw new Error(`${label} must be a relative path, got absolute path: ${pathStr}`);
+    }
+    // Reject paths containing '..'
+    const normalized = path.normalize(pathStr);
+    if (normalized.startsWith('..') || normalized.includes(`${path.sep}..`)) {
+        throw new Error(`${label} contains path traversal sequence: ${pathStr}`);
+    }
+    // Reject paths with shell metacharacters that could be used for injection
+    const dangerousChars = /[;|&$`\\'"<>(){}[\]!#*?~]/;
+    if (dangerousChars.test(pathStr)) {
+        throw new Error(`${label} contains potentially dangerous characters: ${pathStr}`);
+    }
+}
+
+/**
+ * Sanitize a string for safe use in Dockerfile RUN instructions.
+ * Escapes shell metacharacters to prevent command injection.
+ */
+export function sanitizeForDockerfile(value: string): string {
+    // Only allow safe characters for mount options and paths
+    // This is a whitelist approach - only alphanumeric, slash, dot, dash, underscore, equals, comma
+    if (!/^[a-zA-Z0-9/._\-=,]+$/.test(value)) {
+        throw new Error(`Unsafe characters in value for Dockerfile: ${value}`);
+    }
+    return value;
+}
+
+/**
+ * Check if a path is within the workspace (relative and doesn't escape).
+ * Used for debug inspection to prevent information disclosure.
+ */
+export function isPathWithinWorkspace(pathStr: string, workspaceRoot: string): boolean {
+    const resolvedPath = path.resolve(workspaceRoot, pathStr);
+    const normalizedWorkspace = path.resolve(workspaceRoot);
+    return resolvedPath.startsWith(normalizedWorkspace + path.sep) || resolvedPath === normalizedWorkspace;
 }
