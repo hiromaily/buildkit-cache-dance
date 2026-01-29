@@ -33,7 +33,7 @@
     "vitest": "^4.0.18"
   },
   "dependencies": {
-    "@actions/core": "^1.8.0",
+    "@actions/core": "1.8.0",
     "dockerfile-ast": "^0.7.1",
     "mri": "^1.2.0",
     "spawn-please": "^3.0.0"
