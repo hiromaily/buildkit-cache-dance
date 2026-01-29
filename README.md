@@ -1,4 +1,7 @@
-# The BuildKit Cache Dance
+# The BuildKit Cache Dance (Fork)
+
+> **Note**: This is a fork of [`reproducible-containers/buildkit-cache-dance`](https://github.com/reproducible-containers/buildkit-cache-dance) with critical bug fixes.
+
 Save `RUN --mount=type=cache` caches on GitHub Actions or other CI platforms
 
 The BuildKit Cache Dance allows saving [`RUN --mount=type=cache`](https://docs.docker.com/build/guide/mounts/#add-a-cache-mount)
@@ -6,13 +9,18 @@ caches on GitHub Actions or other CI platforms by extracting the cache from the 
 
 Use cases:
 - apt-get (`/var/cache/apt`, `/var/lib/apt`)
-- Go (`/root/.cache/go-build`)
+- Go (`/root/.cache/go-build`, `/go/pkg/mod`)
 - etc.
 
-This [`reproducible-containers/buildkit-cache-dance`](https://github.com/reproducible-containers/buildkit-cache-dance) action was forked from
-[`overmindtech/buildkit-cache-dance`](https://github.com/overmindtech/buildkit-cache-dance/tree/306d31a77191f643c0c4a95083f36c6ddccb4a16)
-(archived on September 2023).
-This action be used for "non-reproducible" containers too.
+## Why this fork?
+
+This fork includes critical bug fixes not present in the upstream repository:
+
+- **Fix multiple caches overwriting each other** ([#39](https://github.com/reproducible-containers/buildkit-cache-dance/issues/39)): Uses unique Docker image/container names for each cache
+- **Fix path traversal vulnerability**: Sanitizes cache id using `path.basename()` to prevent arbitrary file deletion
+- **Fix double slash issue** ([#33](https://github.com/reproducible-containers/buildkit-cache-dance/issues/33)): Correctly handles cache ids starting with '/'
+- **Add scratchDir cleanup**: Prevents leftover data from previous iterations
+- **Improve cleanup reliability**: Moves Docker cleanup to `finally` blocks
 
 ## Examples
 
@@ -60,7 +68,7 @@ jobs:
           key: cache-mount-${{ hashFiles('Dockerfile') }}
 
       - name: Restore Docker cache mounts
-        uses: reproducible-containers/buildkit-cache-dance@v3
+        uses: hiromaily/buildkit-cache-dance@v4
         with:
           builder: ${{ steps.setup-buildx.outputs.name }}
           cache-dir: cache-mount
@@ -90,7 +98,7 @@ If you require more fine grained control you can manually specify a JSON formatt
 
 ```yaml
       - name: Restore Docker cache mounts
-        uses: reproducible-containers/buildkit-cache-dance@v3
+        uses: hiromaily/buildkit-cache-dance@v4
         with:
           builder: ${{ steps.setup-buildx.outputs.name }}
           cache-map: |
@@ -105,7 +113,7 @@ Alternatively, you can provide a JSON object with additional options that should
 
 ```yaml
       - name: Restore Docker cache mounts
-        uses: reproducible-containers/buildkit-cache-dance@v3
+        uses: hiromaily/buildkit-cache-dance@v4
         with:
           builder: ${{ steps.setup-buildx.outputs.name }}
           cache-map: |
@@ -124,19 +132,19 @@ Alternatively, you can provide a JSON object with additional options that should
 In other CI systems, you can run the script directly via `node`:
 
 ```shell
-curl -LJO https://github.com/reproducible-containers/buildkit-cache-dance/archive/refs/tags/v3.1.0.tar.gz
-tar xvf buildkit-cache-dance-3.1.0.tar.gz
+curl -LJO https://github.com/hiromaily/buildkit-cache-dance/archive/refs/tags/v4.0.0.tar.gz
+tar xvf buildkit-cache-dance-4.0.0.tar.gz
 ```
 During injection:
 
 ```shell
-node  ./buildkit-cache-dance-3.1.0/dist/index.js --cache-map '{"var-cache-apt": "/var/cache/apt", "var-lib-apt": "/var/lib/apt"}'
+node  ./buildkit-cache-dance-4.0.0/dist/index.js --cache-map '{"var-cache-apt": "/var/cache/apt", "var-lib-apt": "/var/lib/apt"}'
 ```
 
 After build during extraction:
 
 ```shell
-node  ./buildkit-cache-dance-3.1.0/dist/index.js --extract --cache-map '{"var-cache-apt": "/var/cache/apt", "var-lib-apt": "/var/lib/apt"}'
+node  ./buildkit-cache-dance-4.0.0/dist/index.js --extract --cache-map '{"var-cache-apt": "/var/cache/apt", "var-lib-apt": "/var/lib/apt"}'
 ```
 
 Here are the available options:
@@ -174,6 +182,28 @@ v2 is composed of the single `reproducible-containers/buildkit-cache-dance` acti
 Rewrote the action in TypeScript and adds support for `cache-map` that gets a string of files that need to be injected as a JSON string. This makes it possible to inject multiple directories in one call and simplifies the usage.
 
 This release also makes it possible to run the script outside GitHub Actions in other CI platforms or locally using command line arguments.
+
+### v4 (this fork)
+
+This version is maintained in this fork (`hiromaily/buildkit-cache-dance`) and includes:
+
+- Critical bug fixes for multiple cache handling and path traversal issues
+- Improved cleanup reliability with `try...finally` blocks
+- Updated dependencies (parcel, typescript, vitest, etc.)
+- Security improvements
+
+**Usage:**
+```yaml
+uses: hiromaily/buildkit-cache-dance@v4
+```
+
+## Development Notes
+
+### Why `@actions/core` is pinned to 1.x
+
+The `@actions/core` package is intentionally pinned to version 1.8.0. Starting from version 2.x, `@actions/core` depends on `undici` for HTTP operations. When bundled with Parcel, `undici` causes runtime errors due to its use of Node.js native modules that don't bundle correctly.
+
+Since this action uses Parcel to create a single bundled `dist/index.js` file, we must keep `@actions/core` at 1.x to maintain compatibility.
 
 ## Acknowledgement
 - Thanks to [Alexander Pravdin](https://github.com/speller) for the basic idea in [this comment](https://github.com/moby/buildkit/issues/1512).
