@@ -1,7 +1,7 @@
 import mri from 'mri';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { getInput, warning } from '@actions/core/lib/core.js';
+import { getInput, warning, info } from '@actions/core/lib/core.js';
 import { DockerfileParser, ModifiableInstruction } from 'dockerfile-ast';
 
 export type Opts = {
@@ -120,6 +120,25 @@ export async function getCacheMap(opts: Opts): Promise<CacheMap> {
   try {
     const cacheMap = JSON.parse(opts["cache-map"]) as CacheMap;
     if (Object.keys(cacheMap).length !== 0) {
+      // If cache-dir is specified, prepend it to each cache source path
+      const cacheDir = opts["cache-dir"];
+      if (cacheDir !== null && cacheDir !== '') {
+        // Use Object.create(null) to prevent prototype pollution attacks
+        const prefixedCacheMap: CacheMap = Object.create(null);
+        for (const [source, options] of Object.entries(cacheMap)) {
+          // Use path.basename to normalize the source key and prevent path traversal
+          const normalizedSource = path.basename(source);
+          const prefixedSource = path.join(cacheDir, normalizedSource);
+          prefixedCacheMap[prefixedSource] = options;
+
+          // Warn if the source key was modified by path.basename
+          if (normalizedSource !== source) {
+            warning(`cache-map key "${source}" was normalized to "${normalizedSource}" (path.basename applied for security)`);
+          }
+        }
+        info(`cache-dir applied: cache paths will be under "${cacheDir}/"`);
+        return prefixedCacheMap;
+      }
       return cacheMap;
     }
 

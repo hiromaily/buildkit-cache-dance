@@ -93,6 +93,69 @@ Real-world examples:
 - <https://github.com/rootless-containers/slirp4netns/blob/v1.2.2/.github/workflows/release.yaml#L18-L36>
 - <https://github.com/containers/fuse-overlayfs/blob/40e0f3c/.github/workflows/release.yaml#L17-L36>
 
+## Understanding cache-dir
+
+The `cache-dir` parameter is a critical concept for using this action with `actions/cache`. It specifies **the root directory on the host (GitHub Actions runner) where cache data is extracted to and injected from**.
+
+### What cache-dir IS:
+
+- A "staging area" on the host filesystem where BuildKit cache mount contents are temporarily stored
+- The directory that `actions/cache` should save/restore
+- A bridge between BuildKit's internal cache volumes and the host filesystem
+
+### What cache-dir IS NOT:
+
+- NOT the Docker container's internal paths like `/go/pkg/mod` or `/root/.cache/go-build`
+- NOT the BuildKit internal cache volume itself
+
+### How it works:
+
+```
+┌─────────────────────────────────────────────────────────────────────────┐
+│  GitHub Actions Runner (Host)                                           │
+│                                                                         │
+│   cache-dir (e.g., cache-mount/)                                        │
+│   ├── go-mod/          ← extracted from BuildKit cache id="go-mod"      │
+│   └── go-build/        ← extracted from BuildKit cache id="go-build"   │
+│                                                                         │
+│   actions/cache saves/restores this entire directory                    │
+└─────────────────────────────────────────────────────────────────────────┘
+                              ↑↓ extract/inject
+┌─────────────────────────────────────────────────────────────────────────┐
+│  BuildKit Cache Volumes (inside Docker)                                 │
+│                                                                         │
+│   id="go-mod"     → target="/go/pkg/mod"                                │
+│   id="go-build"   → target="/root/.cache/go-build"                      │
+└─────────────────────────────────────────────────────────────────────────┘
+```
+
+### Important: cache-dir must match actions/cache path
+
+```yaml
+- name: Cache
+  uses: actions/cache@v4
+  with:
+    path: cache-mount        # ← This path
+    key: cache-${{ hashFiles('Dockerfile') }}
+
+- name: BuildKit Cache Dance
+  uses: hiromaily/buildkit-cache-dance@v4
+  with:
+    cache-dir: cache-mount   # ← Must match the path above
+```
+
+When using `cache-map` with `cache-dir`, the cache-map keys are automatically prefixed with `cache-dir`. For example:
+
+```yaml
+cache-dir: cache-mount
+cache-map: |
+  {
+    "go-mod": { "target": "/go/pkg/mod", "id": "go-mod" }
+  }
+```
+
+Results in cache being stored at `cache-mount/go-mod/` on the host.
+
 ## CacheMap Options
 
 If you require more fine grained control you can manually specify a JSON formatted `cache-map`. The keys specify the paths on the Docker builder host to use as the bind source and the string value provides the cache mount `target` within the Docker build:
@@ -155,15 +218,20 @@ build-cache-dance [options]
 Save 'RUN --mount=type=cache' caches on GitHub Actions or other CI platforms
 
 Options:
-  --extract      Extract the cache from the docker container (extract step). Otherwise, inject the cache (main step)
-  --cache-map    The map of actions source to container destination paths for the cache paths
-  --dockerfile   The Dockerfile to use for the auto-discovery of cache-map. Default: 'Dockerfile'
-  --cache-dir    The root directory where cache content is injected from/extracted to when using auto-discovery of the cache-map.
-  --scratch-dir  Where the action is stores some temporary files for its processing. Default: 'scratch'
-  --skip-extraction  Skip the extraction of the cache from the docker container
-  --builder     The name of the buildx builder. Default: 'default'
-  --is-debug    Enable verbose debug logs for troubleshooting. Default: 'false'
-  --help         Show this help
+  --extract          Extract the cache from the docker container (extract step).
+                     Otherwise, inject the cache (main step)
+  --cache-map        JSON map of host paths to cache mount options.
+                     Keys = host directories, Values = target path or mount options object
+  --dockerfile       Dockerfile for auto-discovery of cache-map. Default: 'Dockerfile'
+  --cache-dir        Root directory on host for cache storage. When specified:
+                     - With auto-discovery: caches stored at <cache-dir>/<cache-id>/
+                     - With cache-map: keys are prefixed with <cache-dir>/
+                     This should match the path used by actions/cache.
+  --scratch-dir      Temporary directory for action processing. Default: 'scratch'
+  --skip-extraction  Skip cache extraction (use when cache-hit). Default: 'false'
+  --builder          Name of the buildx builder. Default: 'default'
+  --is-debug         Enable verbose debug logs. Default: 'false'
+  --help             Show this help
 ```
 
 ## Debugging
@@ -223,6 +291,7 @@ This release also makes it possible to run the script outside GitHub Actions in 
 
 This version is maintained in this fork (`hiromaily/buildkit-cache-dance`) and includes:
 
+- **Fix cache-dir being ignored with explicit cache-map**: When both `cache-dir` and `cache-map` were specified, `cache-dir` was not applied to cache paths, causing caches to be saved to the repository root instead of the specified directory
 - Critical bug fixes for multiple cache handling and path traversal issues
 - Improved cleanup reliability with `try...finally` blocks
 - Updated dependencies (parcel, typescript, vitest, etc.)
