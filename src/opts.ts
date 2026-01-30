@@ -14,6 +14,7 @@ export type Opts = {
   "utility-image": string
   "builder"?: string
   "is-debug": boolean
+  "rsync-mode": boolean
   help: boolean
   /** @deprecated Use `cache-map` instead */
   "cache-source"?: string
@@ -33,10 +34,11 @@ export function parseOpts(args: string[]): mri.Argv<Opts> {
       "utility-image": getInput("utility-image") || "ghcr.io/containerd/busybox:latest",
       "builder": getInput("builder") || "default",
       "is-debug": (getInput("is-debug") || "false") === "true",
+      "rsync-mode": (getInput("rsync-mode") || "false") === "true",
       "help": false,
     },
     string: ["cache-map", "dockerfile", "cache-dir", "scratch-dir", "cache-source", "cache-target", "utility-image", "builder"],
-    boolean: ["skip-extraction", "help", "extract", "is-debug"],
+    boolean: ["skip-extraction", "help", "extract", "is-debug", "rsync-mode"],
     alias: {
       "help": ["h"],
     },
@@ -67,6 +69,7 @@ Options:
   --utility-image  The container image to use for injecting and extracting the cache. Default: 'ghcr.io/containerd/busybox:latest'
   --builder      The name of the buildx builder to use for the cache injection
   --is-debug     Enable verbose debug logs for troubleshooting. Default: 'false'
+  --rsync-mode   Use rsync for differential sync instead of cp -R. Much faster for large caches. Default: 'false'
   --help         Show this help
 `);
 }
@@ -214,6 +217,36 @@ export function getBuilder(opts: Opts): string {
 
 export function isDebug(opts: Opts): boolean {
     return opts["is-debug"] === true;
+}
+
+export function isRsyncMode(opts: Opts): boolean {
+    return opts["rsync-mode"] === true;
+}
+
+// Default utility images
+export const DEFAULT_UTILITY_IMAGE = "ghcr.io/containerd/busybox:latest";
+export const RSYNC_UTILITY_IMAGE = "ghcr.io/hiromaily/cache-dance-rsync:latest";
+
+/**
+ * Get the appropriate utility image based on rsync-mode.
+ * If rsync-mode is enabled and no custom utility-image is specified, use the rsync image.
+ */
+export function getUtilityImage(opts: Opts): string {
+    const userSpecified = opts["utility-image"];
+    const rsyncEnabled = isRsyncMode(opts);
+    
+    // If user specified a custom image, always use it
+    if (userSpecified && userSpecified !== DEFAULT_UTILITY_IMAGE) {
+        return userSpecified;
+    }
+    
+    // If rsync-mode is enabled, use the rsync image
+    if (rsyncEnabled) {
+        return RSYNC_UTILITY_IMAGE;
+    }
+    
+    // Default to busybox
+    return DEFAULT_UTILITY_IMAGE;
 }
 
 /**

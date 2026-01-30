@@ -33,6 +33,9 @@ inputs:
   is-debug:
     default: "false"
     description: "Enable verbose debug logs for troubleshooting cache issues"
+  rsync-mode:
+    default: "false"
+    description: "Use rsync for differential sync instead of cp -R. Much faster for large caches on subsequent runs. Requires utility-image with rsync support (e.g., alpine:3.21)"
 runs:
   using: 'node20'
   main: 'dist/index.js'

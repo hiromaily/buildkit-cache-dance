@@ -1,5 +1,5 @@
 import { expect, test } from 'vitest'
-import { getCacheMap, getTargetPath, getMountArgsString, parseOpts, getUID, getGID, generateUniqueSuffix } from '../src/opts.js'
+import { getCacheMap, getTargetPath, getMountArgsString, parseOpts, getUID, getGID, generateUniqueSuffix, getUtilityImage, DEFAULT_UTILITY_IMAGE, RSYNC_UTILITY_IMAGE } from '../src/opts.js'
 import { promises as fs } from 'fs'
 
 test('parseOpts with no arguments', () => {
@@ -15,6 +15,7 @@ test('parseOpts with no arguments', () => {
         "h": false,
         "help": false,
         "is-debug": false,
+        "rsync-mode": false,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -33,6 +34,7 @@ test('parseOpts with cache-map argument', () => {
         "h": false,
         "help": false,
         "is-debug": false,
+        "rsync-mode": false,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -51,6 +53,7 @@ test('parseOpts with deprecated cache-source and cache-target arguments', () => 
         "h": false,
         "help": false,
         "is-debug": false,
+        "rsync-mode": false,
         "cache-source": 'source',
         "cache-target": 'target',
         "utility-image": "ghcr.io/containerd/busybox:latest",
@@ -71,6 +74,7 @@ test('parseOpts with utility-image argument', () => {
         "h": false,
         "help": false,
         "is-debug": false,
+        "rsync-mode": false,
         "utility-image": "alpine:1",
         "builder": "default"
     })
@@ -89,6 +93,7 @@ test('parseOpts with builder argument', () => {
         "h": false,
         "help": false,
         "is-debug": false,
+        "rsync-mode": false,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "another-builder"
     })
@@ -107,6 +112,7 @@ test('parseOpts with dockerfile argument', () => {
         "h": false,
         "help": false,
         "is-debug": false,
+        "rsync-mode": false,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -125,6 +131,7 @@ test('parseOpts with cache-dir argument', () => {
         "h": false,
         "help": false,
         "is-debug": false,
+        "rsync-mode": false,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -143,6 +150,7 @@ test('parseOpts with help argument', () => {
         "h": true,
         "help": true,
         "is-debug": false,
+        "rsync-mode": false,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -419,4 +427,29 @@ test('generateUniqueSuffix with uppercase letters', () => {
 test('generateUniqueSuffix with consecutive special characters', () => {
     const suffix = generateUniqueSuffix('//var//cache//')
     expect(suffix).toBe('var-cache')
+})
+
+// getUtilityImage tests
+test('getUtilityImage returns default busybox when rsync-mode is false', () => {
+    const opts = parseOpts([])
+    const image = getUtilityImage(opts)
+    expect(image).toBe(DEFAULT_UTILITY_IMAGE)
+})
+
+test('getUtilityImage returns rsync image when rsync-mode is true', () => {
+    const opts = parseOpts(['--rsync-mode'])
+    const image = getUtilityImage(opts)
+    expect(image).toBe(RSYNC_UTILITY_IMAGE)
+})
+
+test('getUtilityImage respects custom utility-image even with rsync-mode', () => {
+    const opts = parseOpts(['--rsync-mode', '--utility-image', 'custom/image:latest'])
+    const image = getUtilityImage(opts)
+    expect(image).toBe('custom/image:latest')
+})
+
+test('getUtilityImage uses rsync image when rsync-mode is true and utility-image is default', () => {
+    const opts = parseOpts(['--rsync-mode', '--utility-image', DEFAULT_UTILITY_IMAGE])
+    const image = getUtilityImage(opts)
+    expect(image).toBe(RSYNC_UTILITY_IMAGE)
 })
