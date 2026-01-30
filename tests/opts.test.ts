@@ -296,8 +296,8 @@ test('getMountArgsString with Go cache pattern (explicit id)', () => {
     expect(getMountArgsString(goBuildOptions)).toBe('type=cache,target=/root/.cache/go-build,id=go-build')
 })
 
-test('getCacheMap with explicit cache-map (Go cache pattern)', async () => {
-    // Simulates GitHub Actions workflow with explicit cache-map
+test('getCacheMap with explicit cache-map (Go cache pattern) without cache-dir', async () => {
+    // Simulates GitHub Actions workflow with explicit cache-map but no cache-dir
     const cacheMapJson = JSON.stringify({
         "go-mod": { "target": "/go/pkg/mod", "id": "go-mod" },
         "go-build": { "target": "/root/.cache/go-build", "id": "go-build" }
@@ -305,10 +305,56 @@ test('getCacheMap with explicit cache-map (Go cache pattern)', async () => {
     const opts = parseOpts(['--cache-map', cacheMapJson])
     const cacheMap = await getCacheMap(opts)
     
-    // Verify cache-map is used as-is (not modified by path.basename)
+    // Without cache-dir, cache-map keys are used as-is
     expect(cacheMap).toEqual({
         "go-mod": { "target": "/go/pkg/mod", "id": "go-mod" },
         "go-build": { "target": "/root/.cache/go-build", "id": "go-build" }
+    })
+})
+
+test('getCacheMap with explicit cache-map and cache-dir (Go cache pattern)', async () => {
+    // Simulates GitHub Actions workflow with explicit cache-map AND cache-dir
+    // This is the common pattern: actions/cache saves cache-mount/, and cache-dance
+    // should store caches inside cache-mount/
+    const cacheMapJson = JSON.stringify({
+        "go-mod": { "target": "/go/pkg/mod", "id": "go-mod" },
+        "go-build": { "target": "/root/.cache/go-build", "id": "go-build" }
+    })
+    const opts = parseOpts(['--cache-map', cacheMapJson, '--cache-dir', 'cache-mount'])
+    const cacheMap = await getCacheMap(opts)
+    
+    // With cache-dir, cache-map keys should be prefixed with cache-dir
+    expect(cacheMap).toEqual({
+        "cache-mount/go-mod": { "target": "/go/pkg/mod", "id": "go-mod" },
+        "cache-mount/go-build": { "target": "/root/.cache/go-build", "id": "go-build" }
+    })
+})
+
+test('getCacheMap with explicit cache-map and cache-dir (path normalization)', async () => {
+    // Test that path.basename is applied to cache-map keys for security
+    const cacheMapJson = JSON.stringify({
+        "some/nested/path": { "target": "/tmp/cache", "id": "nested" }
+    })
+    const opts = parseOpts(['--cache-map', cacheMapJson, '--cache-dir', 'cache-mount'])
+    const cacheMap = await getCacheMap(opts)
+    
+    // path.basename extracts only the last component of the key
+    expect(cacheMap).toEqual({
+        "cache-mount/path": { "target": "/tmp/cache", "id": "nested" }
+    })
+})
+
+test('getCacheMap with explicit cache-map and empty cache-dir', async () => {
+    // Empty string cache-dir should not add any prefix
+    const cacheMapJson = JSON.stringify({
+        "go-mod": { "target": "/go/pkg/mod", "id": "go-mod" }
+    })
+    const opts = parseOpts(['--cache-map', cacheMapJson, '--cache-dir', ''])
+    const cacheMap = await getCacheMap(opts)
+    
+    // Empty cache-dir should not affect cache-map keys
+    expect(cacheMap).toEqual({
+        "go-mod": { "target": "/go/pkg/mod", "id": "go-mod" }
     })
 })
 
