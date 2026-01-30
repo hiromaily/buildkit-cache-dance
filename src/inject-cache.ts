@@ -1,10 +1,10 @@
 import { promises as fs } from "fs";
 import path from 'path';
-import { CacheOptions, Opts, getCacheMap, getMountArgsString, getTargetPath, getUID, getGID, getBuilder, generateUniqueSuffix, isDebug, validateSafePath, sanitizeForDockerfile } from './opts.js';
+import { CacheOptions, Opts, getCacheMap, getMountArgsString, getTargetPath, getUID, getGID, getBuilder, generateUniqueSuffix, isDebug, isRsyncMode, getUtilityImage, validateSafePath, sanitizeForDockerfile } from './opts.js';
 import { run, debug, debugSection, debugInspectDirectory } from './run.js';
 import { notice } from '@actions/core/lib/core.js';
 
-async function injectCache(cacheSource: string, cacheOptions: CacheOptions, scratchDir: string, containerImage: string, builder: string, debugEnabled: boolean) {
+async function injectCache(cacheSource: string, cacheOptions: CacheOptions, scratchDir: string, containerImage: string, builder: string, debugEnabled: boolean, rsyncEnabled: boolean) {
     // Security: Validate cacheSource is a safe relative path
     validateSafePath(cacheSource, 'cache source');
     validateSafePath(scratchDir, 'scratch directory');
@@ -21,6 +21,7 @@ async function injectCache(cacheSource: string, cacheOptions: CacheOptions, scra
     debug(`Builder: ${builder}`);
     debug(`Unique suffix: ${uniqueSuffix}`);
     debug(`Image name: ${imageName}`);
+    debug(`Rsync mode: ${rsyncEnabled}`);
 
     // Clean Scratch Directory
     await fs.rm(scratchDir, { recursive: true, force: true });
@@ -58,13 +59,31 @@ async function injectCache(cacheSource: string, cacheOptions: CacheOptions, scra
     }
 
     // Prepare Dancefile to Access Caches
-    const dancefileContent = `
+    let dancefileContent: string;
+
+    if (rsyncEnabled) {
+        // rsync mode: Use rsync for differential sync (much faster on subsequent runs)
+        // Uses ghcr.io/hiromaily/cache-dance-rsync:latest which has rsync pre-installed
+        // --ignore-existing: Skip files that already exist in destination (incremental)
+        // -a: Archive mode (preserves permissions, timestamps, etc.)
+        dancefileContent = `
+FROM ${containerImage}
+COPY buildstamp buildstamp
+RUN --mount=${mountArgs} \\
+    --mount=type=bind,source=.,target=/var/dance-cache \\
+    rsync -a --ignore-existing /var/dance-cache/ ${targetPath}/ ${ownershipCommand} || true
+`;
+    } else {
+        // Default mode: Use cp for full copy
+        dancefileContent = `
 FROM ${containerImage}
 COPY buildstamp buildstamp
 RUN --mount=${mountArgs} \\
     --mount=type=bind,source=.,target=/var/dance-cache \\
     cp -p -R /var/dance-cache/. ${targetPath} ${ownershipCommand} || true
 `;
+    }
+
     await fs.writeFile(path.join(scratchDir, 'Dancefile.inject'), dancefileContent);
 
     debugSection(`Generated Dancefile.inject`);
@@ -105,18 +124,20 @@ RUN --mount=${mountArgs} \\
 
 export async function injectCaches(opts: Opts) {
     const debugEnabled = isDebug(opts);
+    const rsyncEnabled = isRsyncMode(opts);
     const cacheMap = await getCacheMap(opts);
     const scratchDir = opts['scratch-dir'];
-    const containerImage = opts['utility-image'];
+    const containerImage = getUtilityImage(opts);
     const builder = getBuilder(opts);
 
     debugSection(`INJECT CACHES - START`);
     debug(`Total caches to inject: ${Object.keys(cacheMap).length}`);
     debug(`Cache map: ${JSON.stringify(cacheMap, null, 2)}`);
+    debug(`Rsync mode: ${rsyncEnabled}`);
 
     // Inject Caches for each source-target pair
     for (const [cacheSource, cacheOptions] of Object.entries(cacheMap)) {
-        await injectCache(cacheSource, cacheOptions, scratchDir, containerImage, builder, debugEnabled);
+        await injectCache(cacheSource, cacheOptions, scratchDir, containerImage, builder, debugEnabled, rsyncEnabled);
     }
 
     debugSection(`INJECT CACHES - COMPLETE`);

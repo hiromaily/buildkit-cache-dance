@@ -231,6 +231,7 @@ Options:
   --skip-extraction  Skip cache extraction (use when cache-hit). Default: 'false'
   --builder          Name of the buildx builder. Default: 'default'
   --is-debug         Enable verbose debug logs. Default: 'false'
+  --rsync-mode       Use rsync for differential sync (faster for large caches). Default: 'false'
   --help             Show this help
 ```
 
@@ -297,11 +298,43 @@ This version is maintained in this fork (`hiromaily/buildkit-cache-dance`) and i
 - Updated dependencies (parcel, typescript, vitest, etc.)
 - Security improvements
 - **Debug mode** (`is-debug: true`) for troubleshooting cache issues
+- **Rsync mode** (`rsync-mode: true`) for differential sync - much faster for large caches on subsequent runs
 
 **Usage:**
 ```yaml
 uses: hiromaily/buildkit-cache-dance@v4
 ```
+
+## Rsync Mode (Performance Optimization)
+
+For large caches (like Go modules), the default `cp -R` full copy can take 1-4 minutes on each run. Enable `rsync-mode` for differential sync that only copies changed files:
+
+```yaml
+- name: BuildKit Cache Dance
+  uses: hiromaily/buildkit-cache-dance@v4
+  with:
+    cache-dir: cache-mount
+    rsync-mode: true   # Enable differential sync
+    is-debug: true
+```
+
+### How it works
+
+| Mode | Command | Performance |
+|------|---------|-------------|
+| Default (`rsync-mode: false`) | `cp -p -R` | Full copy every time |
+| Rsync (`rsync-mode: true`) | `rsync -a --ignore-existing` | Only copies new/changed files |
+
+### Performance comparison
+
+| Cache Size | First Run | Subsequent Runs (cp) | Subsequent Runs (rsync) |
+|------------|-----------|----------------------|-------------------------|
+| 500 MB | ~30s | ~30s | **~5s** |
+| 1 GB | ~60s | ~60s | **~10s** |
+
+### Utility image
+
+When `rsync-mode: true` is enabled, the action automatically uses `ghcr.io/hiromaily/cache-dance-rsync:latest` (Alpine 3.23 with rsync pre-installed) instead of the default busybox image. You can override this with a custom `utility-image` if needed.
 
 ## Development Notes
 

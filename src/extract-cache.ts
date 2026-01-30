@@ -1,9 +1,9 @@
 import { promises as fs } from 'fs';
 import path from 'path';
-import {CacheOptions, Opts, getCacheMap, getMountArgsString, getTargetPath, getBuilder, generateUniqueSuffix, isDebug, validateSafePath, sanitizeForDockerfile} from './opts.js';
+import {CacheOptions, Opts, getCacheMap, getMountArgsString, getTargetPath, getBuilder, generateUniqueSuffix, isDebug, isRsyncMode, getUtilityImage, validateSafePath, sanitizeForDockerfile} from './opts.js';
 import { run, runPiped, debug, debugSection, debugInspectDirectory, debugSizeComparison } from './run.js';
 
-async function extractCache(cacheSource: string, cacheOptions: CacheOptions, scratchDir: string, containerImage: string, builder: string, debugEnabled: boolean) {
+async function extractCache(cacheSource: string, cacheOptions: CacheOptions, scratchDir: string, containerImage: string, builder: string, debugEnabled: boolean, rsyncEnabled: boolean) {
     // Security: Validate cacheSource is a safe relative path
     validateSafePath(cacheSource, 'cache source');
     validateSafePath(scratchDir, 'scratch directory');
@@ -22,6 +22,7 @@ async function extractCache(cacheSource: string, cacheOptions: CacheOptions, scr
     debug(`Unique suffix: ${uniqueSuffix}`);
     debug(`Image name: ${imageName}`);
     debug(`Container name: ${containerName}`);
+    debug(`Rsync mode: ${rsyncEnabled}`);
 
     // Clean Scratch Directory to avoid leftover data from previous iterations
     await fs.rm(scratchDir, { recursive: true, force: true });
@@ -42,13 +43,30 @@ async function extractCache(cacheSource: string, cacheOptions: CacheOptions, scr
     debug(`Target path: ${targetPath}`);
     debug(`Mount args (CRITICAL): ${mountArgs}`);
 
-    const dancefileContent = `
+    let dancefileContent: string;
+
+    if (rsyncEnabled) {
+        // rsync mode: Use rsync for differential sync (much faster on subsequent runs)
+        // Uses ghcr.io/hiromaily/cache-dance-rsync:latest which has rsync pre-installed
+        // -a: Archive mode (preserves permissions, timestamps, etc.)
+        dancefileContent = `
+FROM ${containerImage}
+COPY buildstamp buildstamp
+RUN --mount=${mountArgs} \\
+    mkdir -p /var/dance-cache/ \\
+    && rsync -a ${targetPath}/ /var/dance-cache/ || true
+`;
+    } else {
+        // Default mode: Use cp for full copy
+        dancefileContent = `
 FROM ${containerImage}
 COPY buildstamp buildstamp
 RUN --mount=${mountArgs} \\
     mkdir -p /var/dance-cache/ \\
     && cp -p -R ${targetPath}/. /var/dance-cache/ || true
 `;
+    }
+
     await fs.writeFile(path.join(scratchDir, 'Dancefile.extract'), dancefileContent);
 
     debugSection(`Generated Dancefile.extract (CRITICAL - check mount args)`);
@@ -126,9 +144,11 @@ RUN --mount=${mountArgs} \\
 
 export async function extractCaches(opts: Opts) {
     const debugEnabled = isDebug(opts);
+    const rsyncEnabled = isRsyncMode(opts);
 
     debugSection(`EXTRACT CACHES - POST JOB CLEANUP`);
     debug(`skip-extraction: ${opts["skip-extraction"]}`);
+    debug(`Rsync mode: ${rsyncEnabled}`);
 
     if (opts["skip-extraction"]) {
         console.log("skip-extraction is set. Skipping extraction step...");
@@ -137,16 +157,17 @@ export async function extractCaches(opts: Opts) {
 
     const cacheMap = await getCacheMap(opts);
     const scratchDir = opts['scratch-dir'];
-    const containerImage = opts['utility-image'];
+    const containerImage = getUtilityImage(opts);
     const builder = getBuilder(opts);
 
     debugSection(`EXTRACT CACHES - START`);
     debug(`Total caches to extract: ${Object.keys(cacheMap).length}`);
     debug(`Cache map: ${JSON.stringify(cacheMap, null, 2)}`);
+    debug(`Rsync mode: ${rsyncEnabled}`);
 
     // Extract Caches for each source-target pair
     for (const [cacheSource, cacheOptions] of Object.entries(cacheMap)) {
-        await extractCache(cacheSource, cacheOptions, scratchDir, containerImage, builder, debugEnabled);
+        await extractCache(cacheSource, cacheOptions, scratchDir, containerImage, builder, debugEnabled, rsyncEnabled);
     }
 
     debugSection(`EXTRACT CACHES - COMPLETE`);

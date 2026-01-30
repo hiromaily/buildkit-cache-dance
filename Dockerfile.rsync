@@ -1,0 +1,5 @@
+# Minimal rsync image for buildkit-cache-dance
+# Used when rsync-mode is enabled for differential cache sync
+FROM alpine:3.23
+RUN apk add --no-cache rsync
+ENTRYPOINT ["/bin/sh"]
