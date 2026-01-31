@@ -1,6 +1,6 @@
 {
   "name": "buildkit-cache-dance",
-  "version": "4.0.0",
+  "version": "4.2.1",
   "description": "Save `RUN --mount=type=cache` caches on GitHub Actions or other CI platforms",
   "main": "dist/index.js",
   "source": "src/index.ts",
