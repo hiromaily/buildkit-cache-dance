@@ -2,6 +2,10 @@ import { promises as fs } from "fs";
 import path from 'path';
 import { CacheOptions, Opts, getCacheMap, getMountArgsString, getTargetPath, getUID, getGID, getBuilder, generateUniqueSuffix, isDebug, isRsyncMode, getUtilityImage, validateSafePath, sanitizeForDockerfile } from './opts.js';
 import { run, debug, debugSection, debugInspectDirectory } from './run.js';
+
+function elapsedMs(start: number): number {
+  return Math.round((Date.now() - start) / 10) / 100;
+}
 import { notice } from '@actions/core/lib/core.js';
 
 async function injectCache(cacheSource: string, cacheOptions: CacheOptions, scratchDir: string, containerImage: string, builder: string, debugEnabled: boolean, rsyncEnabled: boolean) {
@@ -130,6 +134,7 @@ export async function injectCaches(opts: Opts) {
     const containerImage = getUtilityImage(opts);
     const builder = getBuilder(opts);
 
+    const injectStart = Date.now();
     debugSection(`INJECT CACHES - START`);
     debug(`Total caches to inject: ${Object.keys(cacheMap).length}`);
     debug(`Cache map: ${JSON.stringify(cacheMap, null, 2)}`);
@@ -140,5 +145,9 @@ export async function injectCaches(opts: Opts) {
         await injectCache(cacheSource, cacheOptions, scratchDir, containerImage, builder, debugEnabled, rsyncEnabled);
     }
 
+    if (debugEnabled) {
+        debugSection(`INJECT CACHES - TIMING`);
+        debug(`Inject total: ${elapsedMs(injectStart)}s (use this to verify cache/rsync improvement)`);
+    }
     debugSection(`INJECT CACHES - COMPLETE`);
 }

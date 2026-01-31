@@ -3,7 +3,8 @@ import os from "os";
 import path from "path";
 import { injectCaches } from "./inject-cache.js";
 import { extractCaches } from "./extract-cache.js";
-import { help, parseOpts, isDebug, getCacheMap, getMountArgsString, getTargetPath } from "./opts.js";
+import { info } from "@actions/core/lib/core.js";
+import { help, parseOpts, isDebug, isRsyncMode, getCacheMap, getMountArgsString, getTargetPath, getUtilityImage } from "./opts.js";
 import { setDebugMode, debug, debugSection } from "./run.js";
 
 async function dumpInputs(opts: ReturnType<typeof parseOpts>) {
@@ -30,6 +31,8 @@ async function dumpInputs(opts: ReturnType<typeof parseOpts>) {
   debug(`scratch-dir (absolute): ${scratchDirPath}`);
   debug(`skip-extraction: ${opts["skip-extraction"]}`);
   debug(`utility-image: ${opts["utility-image"]}`);
+  debug(`utility-image (resolved): ${getUtilityImage(opts)}`);
+  debug(`rsync-mode: ${opts["rsync-mode"]}`);
   debug(`is-debug: ${opts["is-debug"]}`);
   debug(`extract (post step): ${opts.extract}`);
 
@@ -85,6 +88,9 @@ async function main(args: string[]) {
   // Initialize debug mode
   const debugEnabled = isDebug(opts);
   setDebugMode(debugEnabled);
+
+  // Always log mode so CI logs show rsync is really in use (debuggable without is-debug)
+  info(`buildkit-cache-dance: rsync-mode=${isRsyncMode(opts)}, utility-image=${getUtilityImage(opts)}${debugEnabled ? ", is-debug=true" : ""}`);
 
   if (debugEnabled) {
     debugSection(`BuildKit Cache Dance - DEBUG MODE ENABLED`);

@@ -3,6 +3,10 @@ import path from 'path';
 import {CacheOptions, Opts, getCacheMap, getMountArgsString, getTargetPath, getBuilder, generateUniqueSuffix, isDebug, isRsyncMode, getUtilityImage, validateSafePath, sanitizeForDockerfile} from './opts.js';
 import { run, runPiped, debug, debugSection, debugInspectDirectory, debugSizeComparison } from './run.js';
 
+function elapsedMs(start: number): number {
+  return Math.round((Date.now() - start) / 10) / 100;
+}
+
 async function extractCache(cacheSource: string, cacheOptions: CacheOptions, scratchDir: string, containerImage: string, builder: string, debugEnabled: boolean, rsyncEnabled: boolean) {
     // Security: Validate cacheSource is a safe relative path
     validateSafePath(cacheSource, 'cache source');
@@ -160,6 +164,7 @@ export async function extractCaches(opts: Opts) {
     const containerImage = getUtilityImage(opts);
     const builder = getBuilder(opts);
 
+    const extractStart = Date.now();
     debugSection(`EXTRACT CACHES - START`);
     debug(`Total caches to extract: ${Object.keys(cacheMap).length}`);
     debug(`Cache map: ${JSON.stringify(cacheMap, null, 2)}`);
@@ -170,5 +175,9 @@ export async function extractCaches(opts: Opts) {
         await extractCache(cacheSource, cacheOptions, scratchDir, containerImage, builder, debugEnabled, rsyncEnabled);
     }
 
+    if (debugEnabled) {
+        debugSection(`EXTRACT CACHES - TIMING`);
+        debug(`Extract total: ${elapsedMs(extractStart)}s (use this to verify cache/rsync improvement)`);
+    }
     debugSection(`EXTRACT CACHES - COMPLETE`);
 }
