@@ -338,6 +338,17 @@ When `rsync-mode: true` is enabled, the action automatically uses `ghcr.io/hirom
 
 ## Development Notes
 
+### Validate Dist (CI)
+
+The unit-tests workflow runs `pnpm i` (which runs `prepare` → build) and then checks that `dist/` has no uncommitted changes. **After changing source, you must build and commit `dist/`** or the "Validate Dist" step will fail:
+
+```bash
+cd buildkit-cache-dance
+pnpm run build
+git add dist/
+git commit -m "chore(buildkit-cache-dance): update dist"
+```
+
 ### Why `@actions/core` is pinned to 1.x
 
 The `@actions/core` package is intentionally pinned to version 1.8.0. Starting from version 2.x, `@actions/core` depends on `undici` for HTTP operations. When bundled with Parcel, `undici` causes runtime errors due to its use of Node.js native modules that don't bundle correctly.
