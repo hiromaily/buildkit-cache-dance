@@ -106,13 +106,14 @@ RUN --mount=${mountArgs} \\
             // rsync -a: archive mode (preserves permissions, timestamps, symlinks, etc.)
             // rsync --delete: remove files in destination that don't exist in source
             // This provides true differential sync - only changed files are written
+            // Note: Use 'sh -c' because the base image has ENTRYPOINT ["/bin/sh"]
             debug(`Running docker run with rsync to sync to host cache-dir...`);
             await run('docker', [
                 'run',
                 '--rm',
                 '-v', `${absoluteCacheSource}:/mnt/host-cache`,
                 imageName,
-                'rsync', '-a', '--delete', '/var/dance-cache/', '/mnt/host-cache/'
+                '-c', 'rsync -a --delete /var/dance-cache/ /mnt/host-cache/'
             ]);
             debug(`Rsync completed successfully`);
         } else {
