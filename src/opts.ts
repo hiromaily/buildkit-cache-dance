@@ -34,7 +34,7 @@ export function parseOpts(args: string[]): mri.Argv<Opts> {
       "utility-image": getInput("utility-image") || "ghcr.io/containerd/busybox:latest",
       "builder": getInput("builder") || "default",
       "is-debug": (getInput("is-debug") || "false") === "true",
-      "rsync-mode": (getInput("rsync-mode") || "false") === "true",
+      "rsync-mode": (getInput("rsync-mode") || "true") !== "false",
       "help": false,
     },
     string: ["cache-map", "dockerfile", "cache-dir", "scratch-dir", "cache-source", "cache-target", "utility-image", "builder"],
@@ -69,7 +69,7 @@ Options:
   --utility-image  The container image to use for injecting and extracting the cache. Default: 'ghcr.io/containerd/busybox:latest'
   --builder      The name of the buildx builder to use for the cache injection
   --is-debug     Enable verbose debug logs for troubleshooting. Default: 'false'
-  --rsync-mode   Use rsync for differential sync instead of cp -R. Much faster for large caches. Default: 'false'
+  --rsync-mode   Use rsync for differential sync instead of cp -R. Much faster for large caches. Default: 'true'
   --help         Show this help
 `);
 }

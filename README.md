@@ -234,7 +234,7 @@ Options:
   --skip-extraction  Skip cache extraction (use when cache-hit). Default: 'false'
   --builder          Name of the buildx builder. Default: 'default'
   --is-debug         Enable verbose debug logs. Default: 'false'
-  --rsync-mode       Use rsync for differential sync (faster for large caches). Default: 'false'
+  --rsync-mode       Use rsync for differential sync (faster for large caches). Default: 'true'
   --help             Show this help
 ```
 
