@@ -8,6 +8,7 @@ The BuildKit Cache Dance allows saving [`RUN --mount=type=cache`](https://docs.d
 caches on GitHub Actions or other CI platforms by extracting the cache from the previous build and injecting it into the current build.
 
 Use cases:
+
 - apt-get (`/var/cache/apt`, `/var/lib/apt`)
 - Go (`/root/.cache/go-build`, `/go/pkg/mod`)
 - etc.
@@ -30,7 +31,7 @@ This fork includes critical bug fixes not present in the upstream repository:
 Dockerfile:
 
 ```dockerfile
-FROM ubuntu:22.04
+FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN \
   --mount=type=cache,target=/var/cache/apt,sharing=locked \
@@ -51,7 +52,7 @@ on:
 
 jobs:
   Build:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
       - uses: docker/setup-buildx-action@v3
@@ -90,6 +91,7 @@ jobs:
 ```
 
 Real-world examples:
+
 - <https://github.com/rootless-containers/slirp4netns/blob/v1.2.2/.github/workflows/release.yaml#L18-L36>
 - <https://github.com/containers/fuse-overlayfs/blob/40e0f3c/.github/workflows/release.yaml#L17-L36>
 
@@ -97,18 +99,18 @@ Real-world examples:
 
 The `cache-dir` parameter is a critical concept for using this action with `actions/cache`. It specifies **the root directory on the host (GitHub Actions runner) where cache data is extracted to and injected from**.
 
-### What cache-dir IS:
+### What cache-dir IS
 
 - A "staging area" on the host filesystem where BuildKit cache mount contents are temporarily stored
 - The directory that `actions/cache` should save/restore
 - A bridge between BuildKit's internal cache volumes and the host filesystem
 
-### What cache-dir IS NOT:
+### What cache-dir IS NOT
 
 - NOT the Docker container's internal paths like `/go/pkg/mod` or `/root/.cache/go-build`
 - NOT the BuildKit internal cache volume itself
 
-### How it works:
+### How it works
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
@@ -199,6 +201,7 @@ In other CI systems, you can run the script directly via `node`:
 curl -LJO https://github.com/hiromaily/buildkit-cache-dance/archive/refs/tags/v4.0.0.tar.gz
 tar xvf buildkit-cache-dance-4.0.0.tar.gz
 ```
+
 During injection:
 
 ```shell
@@ -264,22 +267,54 @@ Debug mode outputs:
 5. **Docker commands**: All docker commands being executed
 
 This helps diagnose common issues:
+
 - Path mismatches between Dockerfile and cache-map
 - Missing `id=` in mount arguments (causes cache miss)
 - Empty cache directories after extraction
 - Cache not being saved by `actions/cache`
 
+## Performance Optimization
+
+### skip-extraction
+
+Use `skip-extraction: true` to skip the Post extract step (~60 seconds) when cache updates are not needed.
+
+- **Inject (Main step)**: Always runs (restores cache to BuildKit)
+- **Extract (Post step)**: Skipped when `skip-extraction: true`
+
+**Recommended**: Enable on non-main branches to save CI time while still benefiting from cached builds.
+
+```yaml
+- name: BuildKit Cache Dance (inject; extract in post)
+  uses: hiromaily/buildkit-cache-dance@v4
+  with:
+    builder: ${{ steps.setup-buildx.outputs.name }}
+    cache-dir: cache-mount
+    cache-map: |
+      {
+        "go-mod":  { "target": "/go/pkg/mod", "id": "go-mod" },
+        "go-build":{ "target": "/root/.cache/go-build", "id": "go-build" }
+      }
+    # Skip extraction on non-main branches (saves ~60s)
+    # Cache is still restored and used, just not updated
+    skip-extraction: ${{ github.ref != 'refs/heads/main' }}
+```
+
 ## Releases
+
 ### v1
+
 v1 follows the original design of [`overmindtech/buildkit-cache-dance`](https://github.com/overmindtech/buildkit-cache-dance/tree/306d31a77191f643c0c4a95083f36c6ddccb4a16).
 
 v1 is composed of two actions:
+
 - `reproducible-containers/buildkit-cache-dance/inject@v1.0.1`
 - `reproducible-containers/buildkit-cache-dance/extract@v1.0.1`
 
 See the [`releases/v1`](https://github.com/reproducible-containers/buildkit-cache-dance/tree/releases/v1) branch.
 
 ### v2
+
 v2 is composed of the single `reproducible-containers/buildkit-cache-dance` action.
 
 ### v3
@@ -301,6 +336,7 @@ This version is maintained in this fork (`hiromaily/buildkit-cache-dance`) and i
 - **Rsync mode** (`rsync-mode: true`) for differential sync - much faster for large caches on subsequent runs
 
 **Usage:**
+
 ```yaml
 uses: hiromaily/buildkit-cache-dance@v4
 ```
@@ -356,5 +392,6 @@ The `@actions/core` package is intentionally pinned to version 1.8.0. Starting f
 Since this action uses Parcel to create a single bundled `dist/index.js` file, we must keep `@actions/core` at 1.x to maintain compatibility.
 
 ## Acknowledgement
+
 - Thanks to [Alexander Pravdin](https://github.com/speller) for the basic idea in [this comment](https://github.com/moby/buildkit/issues/1512).
 - Thanks to the authors of the original [`overmindtech/buildkit-cache-dance`](https://github.com/overmindtech/buildkit-cache-dance).
