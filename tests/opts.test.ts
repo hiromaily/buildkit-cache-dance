@@ -15,7 +15,7 @@ test('parseOpts with no arguments', () => {
         "h": false,
         "help": false,
         "is-debug": false,
-        "rsync-mode": false,
+        "rsync-mode": true,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -34,7 +34,7 @@ test('parseOpts with cache-map argument', () => {
         "h": false,
         "help": false,
         "is-debug": false,
-        "rsync-mode": false,
+        "rsync-mode": true,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -53,7 +53,7 @@ test('parseOpts with deprecated cache-source and cache-target arguments', () => 
         "h": false,
         "help": false,
         "is-debug": false,
-        "rsync-mode": false,
+        "rsync-mode": true,
         "cache-source": 'source',
         "cache-target": 'target',
         "utility-image": "ghcr.io/containerd/busybox:latest",
@@ -74,7 +74,7 @@ test('parseOpts with utility-image argument', () => {
         "h": false,
         "help": false,
         "is-debug": false,
-        "rsync-mode": false,
+        "rsync-mode": true,
         "utility-image": "alpine:1",
         "builder": "default"
     })
@@ -93,7 +93,7 @@ test('parseOpts with builder argument', () => {
         "h": false,
         "help": false,
         "is-debug": false,
-        "rsync-mode": false,
+        "rsync-mode": true,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "another-builder"
     })
@@ -112,7 +112,7 @@ test('parseOpts with dockerfile argument', () => {
         "h": false,
         "help": false,
         "is-debug": false,
-        "rsync-mode": false,
+        "rsync-mode": true,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -131,7 +131,7 @@ test('parseOpts with cache-dir argument', () => {
         "h": false,
         "help": false,
         "is-debug": false,
-        "rsync-mode": false,
+        "rsync-mode": true,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -150,7 +150,7 @@ test('parseOpts with help argument', () => {
         "h": true,
         "help": true,
         "is-debug": false,
-        "rsync-mode": false,
+        "rsync-mode": true,
         "utility-image": "ghcr.io/containerd/busybox:latest",
         "builder": "default"
     })
@@ -430,8 +430,14 @@ test('generateUniqueSuffix with consecutive special characters', () => {
 })
 
 // getUtilityImage tests
-test('getUtilityImage returns default busybox when rsync-mode is false', () => {
+test('getUtilityImage returns rsync image by default (rsync-mode is true)', () => {
     const opts = parseOpts([])
+    const image = getUtilityImage(opts)
+    expect(image).toBe(RSYNC_UTILITY_IMAGE)
+})
+
+test('getUtilityImage returns busybox when rsync-mode is explicitly false', () => {
+    const opts = parseOpts(['--rsync-mode=false'])
     const image = getUtilityImage(opts)
     expect(image).toBe(DEFAULT_UTILITY_IMAGE)
 })

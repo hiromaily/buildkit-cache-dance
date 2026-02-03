@@ -34,7 +34,7 @@ export function parseOpts(args: string[]): mri.Argv<Opts> {
       "utility-image": getInput("utility-image") || "ghcr.io/containerd/busybox:latest",
       "builder": getInput("builder") || "default",
       "is-debug": (getInput("is-debug") || "false") === "true",
-      "rsync-mode": (getInput("rsync-mode") || "true") !== "false",
+      "rsync-mode": (getInput("rsync-mode") || "true") === "true",
       "help": false,
     },
     string: ["cache-map", "dockerfile", "cache-dir", "scratch-dir", "cache-source", "cache-target", "utility-image", "builder"],
